@@ -11,23 +11,99 @@ Your goal is to:
 - Evaluate what your system gets right and wrong
 - Reflect on how this mirrors real world AI recommenders
 
-Replace this paragraph with your own summary of what your version does.
+This simulation is a content-based music recommender that scores a catalog of 20 songs against a user taste profile and returns the top K matches with plain-language explanations. It uses no play history or collaborative data — every recommendation is derived entirely from song attributes and stated user preferences, making the reasoning fully transparent and inspectable.
 
 ---
 
 ## How The System Works
 
-Explain your design in plain language.
+### Real-world vs. this simulation
 
-Some prompts to answer:
+Real-world recommenders (Spotify, YouTube, Netflix) use collaborative filtering — they don't just look at a song's attributes, they look at what millions of other users with similar taste histories listened to next. They also factor in implicit signals: how long you played a track, whether you skipped it, time of day, and session context. The result is a system that can surface songs you'd never have described yourself as liking, because it learned from people who are like you.
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
+This simulation prioritizes **content-based filtering** instead — it compares the attributes of a song directly against the stated preferences of a user, with no historical play data needed. The tradeoff is transparency: every recommendation has a clear, explainable reason tied to features the user already understands (genre, mood, energy level). The system rewards songs that match the user's preferred genre and mood first (high-weight categorical match), then fine-tune rankings using continuous audio features to break ties.
 
-You can include a simple diagram or bullet list if helpful.
+---
+
+### Song features used
+
+| Feature | Type | Role in scoring |
+|---|---|---|
+| `genre` | categorical | Primary match — highest point value |
+| `mood` | categorical | Secondary match — strong contextual signal |
+| `energy` | float 0–1 | Continuous similarity — widest range in dataset |
+| `valence` | float 0–1 | Tiebreaker — bright vs. dark sound |
+| `acousticness` | float 0–1 | Tiebreaker — produced vs. organic feel |
+| `tempo_bpm` | float | Not scored — correlated with genre, low added value |
+| `danceability` | float 0–1 | Not scored — correlated with energy |
+
+### User profile fields
+
+| Field | Type | Purpose |
+|---|---|---|
+| `genre` | str | Exact genre preference |
+| `related_genres` | list[str] | Genres that earn partial credit |
+| `mood` | str | Preferred mood/activity context |
+| `target_energy` | float 0–1 | Ideal energy level |
+| `target_valence` | float 0–1 | Ideal musical positivity |
+| `target_acousticness` | float 0–1 | Ideal acoustic vs. electronic feel |
+| `likes_acoustic` | bool | Boolean form of acousticness preference |
+
+---
+
+### Algorithm Recipe
+
+Each song is scored out of a maximum of **6.0 points**. The rules are applied in order:
+
+```
+1. GENRE RULE (categorical)
+   Exact genre match   → +2.0 pts
+   Related genre match → +1.0 pt
+   No match            → +0.0 pts
+
+2. MOOD RULE (categorical)
+   Exact mood match    → +1.5 pts
+   No match            → +0.0 pts
+
+3. ENERGY SIMILARITY (continuous)
+   +1.5 × (1 − (song.energy − target_energy)²)
+   max = 1.5 pts   (full points when energies are identical)
+
+4. VALENCE SIMILARITY (continuous)
+   +0.5 × (1 − (song.valence − target_valence)²)
+   max = 0.5 pts
+
+5. ACOUSTICNESS SIMILARITY (continuous)
+   +0.5 × (1 − (song.acousticness − target_acousticness)²)
+   max = 0.5 pts
+```
+
+Songs are then sorted by score descending and the top K are returned, each with a plain-language explanation of why it was recommended.
+
+**Data flow:**
+```
+user_prefs + songs.csv
+       ↓
+   load_songs()        — parse CSV into list of dicts
+       ↓
+   score_song()        — apply recipe above to each song
+       ↓
+   recommend_songs()   — sort by score, slice top K, attach explanations
+       ↓
+   print results
+```
+
+---
+
+### Known Biases and Limitations
+
+- **Genre dominance:** At +2.0 pts, genre is the single largest signal. A perfect mood + energy match without a genre match (2.0 pts) can still outscore a mood mismatch within the same genre — which means a "wrong mood, right genre" song may rank above a "right mood, wrong genre" song. This could surface energetic pop songs to a user who wanted something calm.
+
+- **Cold-start taste assumption:** The profile requires the user to know and state their preferred genre, mood, and energy upfront. A user who says "I like whatever is on" cannot be served well.
+
+- **Catalog bias:** The 20-song catalog skews toward lofi, pop, and ambient. Genres like hip-hop, classical, or R&B are entirely absent — users with those tastes will always get poor recommendations regardless of weighting.
+
+- **No diversity control:** The ranking picks the K closest matches, which means a user could receive five nearly identical songs (e.g., five pop/happy tracks) with no variety introduced.
 
 ---
 
@@ -53,6 +129,10 @@ pip install -r requirements.txt
 ```bash
 python -m src.main
 ```
+
+**Example output:**
+
+![Music Recommender terminal output](src/assets/Screenshot%202026-04-18%20184129.png)
 
 ### Running Tests
 

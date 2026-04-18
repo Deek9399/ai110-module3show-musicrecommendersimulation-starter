@@ -1,0 +1,94 @@
+flowchart TD
+    %% ─── INPUT ───────────────────────────────────────────────
+    subgraph INPUT["INPUT — User Preferences"]
+        UP["user_prefs dict
+        ────────────────
+        genre:          'pop'
+        related_genres: ['indie pop', 'synthwave']
+        mood:           'happy'
+        target_energy:  0.80
+        target_valence: 0.82
+        target_acousticness: 0.20
+        likes_acoustic: False"]
+        CSV["data/songs.csv
+        ────────────────
+        20 songs
+        id · title · artist
+        genre · mood · energy
+        valence · acousticness"]
+    end
+
+    %% ─── LOAD ────────────────────────────────────────────────
+    LOAD["load_songs()
+    Parse CSV → List of song dicts"]
+
+    %% ─── PROCESS ─────────────────────────────────────────────
+    subgraph PROCESS["PROCESS — Score Every Song"]
+        LOOP["For each song in songs list"]
+
+        subgraph SCORE["score_song(song, user_prefs)"]
+            R1["Genre rule
+            exact match  → +2.0 pts
+            related match → +1.0 pt
+            no match     → +0.0 pts"]
+            R2["Mood rule
+            exact match  → +1.5 pts
+            no match     → +0.0 pts"]
+            R3["Energy similarity
+            +1.5 × (1 − (song.energy − target)²)
+            max = 1.5 pts"]
+            R4["Valence similarity
+            +0.5 × (1 − (song.valence − target)²)
+            max = 0.5 pts"]
+            R5["Acousticness similarity
+            +0.5 × (1 − (song.acousticness − target)²)
+            max = 0.5 pts"]
+            TOTAL["Sum all points
+            max possible = 6.0 pts"]
+        end
+
+        COLLECT["Collect (song, score, explanation)
+        tuples for every song"]
+    end
+
+    %% ─── OUTPUT ──────────────────────────────────────────────
+    subgraph OUTPUT["OUTPUT — Top K Recommendations"]
+        SORT["Sort all tuples
+        by score descending"]
+        TOPK["Slice top K results
+        (default k = 5)"]
+        PRINT["Print results
+        ─────────────────────────
+        Sunrise City    — Score: 5.49
+        Because: Matched genre 'pop' and
+        mood 'happy'; energy very close
+
+        Summer Static   — Score: 5.49
+        Gym Hero        — Score: 3.97
+        Rooftop Lights  — Score: 3.48
+        Golden Hour     — Score: 3.45"]
+    end
+
+    %% ─── CONNECTIONS ─────────────────────────────────────────
+    UP --> PROCESS
+    CSV --> LOAD --> LOOP
+    LOOP --> SCORE
+    R1 --> TOTAL
+    R2 --> TOTAL
+    R3 --> TOTAL
+    R4 --> TOTAL
+    R5 --> TOTAL
+    TOTAL --> COLLECT
+    COLLECT -->|"repeat for all 20 songs"| LOOP
+    COLLECT --> SORT
+    SORT --> TOPK --> PRINT
+
+    %% ─── STYLES ──────────────────────────────────────────────
+    style INPUT        fill:#dbeafe,stroke:#3b82f6,color:#000
+    style PROCESS      fill:#fef9c3,stroke:#eab308,color:#000
+    style OUTPUT       fill:#dcfce7,stroke:#22c55e,color:#000
+    style UP           fill:#eff6ff,stroke:#93c5fd,color:#000
+    style CSV          fill:#eff6ff,stroke:#93c5fd,color:#000
+    style SCORE        fill:#fefce8,stroke:#fde047,color:#000
+    style TOTAL        fill:#fde68a,stroke:#f59e0b,color:#000
+    style PRINT        fill:#bbf7d0,stroke:#4ade80,color:#000
