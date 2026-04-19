@@ -3,6 +3,29 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 
+# ── Scoring weights ────────────────────────────────────────────────────────────
+# Baseline (original) values:
+#   genre_exact=2.0, genre_related=1.0, mood=1.5, energy=1.5, valence=0.5, acousticness=0.5
+#   max_score = 6.0
+# Current: sensitivity experiment — energy doubled, genre halved
+WEIGHTS = {
+    "genre_exact":   1.0,   # baseline: 2.0  (halved)
+    "genre_related": 0.5,   # baseline: 1.0  (halved)
+    "mood":          1.5,   # baseline: 1.5  (unchanged)
+    "energy":        3.0,   # baseline: 1.5  (doubled)
+    "valence":       0.5,   # baseline: 0.5  (unchanged)
+    "acousticness":  0.5,   # baseline: 0.5  (unchanged)
+}
+
+# Maximum achievable score under the current WEIGHTS (used for display/normalization)
+MAX_SCORE = (
+    WEIGHTS["genre_exact"]
+    + WEIGHTS["mood"]
+    + WEIGHTS["energy"]
+    + WEIGHTS["valence"]
+    + WEIGHTS["acousticness"]
+)  # = 6.5
+
 @dataclass
 class Song:
     """
@@ -41,22 +64,22 @@ class Recommender:
         self.songs = songs
 
     def _score(self, user: UserProfile, song: Song) -> float:
-        """Returns a relevance score for song against a UserProfile (max 5.5 pts)."""
+        """Returns a relevance score for song against a UserProfile (max varies with WEIGHTS)."""
         score = 0.0
 
         if song.genre == user.favorite_genre:
-            score += 2.0
+            score += WEIGHTS["genre_exact"]
 
         if song.mood == user.favorite_mood:
-            score += 1.5
+            score += WEIGHTS["mood"]
 
-        score += 1.5 * (1 - (song.energy - user.target_energy) ** 2)
+        score += WEIGHTS["energy"] * (1 - (song.energy - user.target_energy) ** 2)
 
         # acousticness bonus: reward low-acoustic songs for non-acoustic users
         if not user.likes_acoustic:
-            score += 0.5 * (1 - song.acousticness)
+            score += WEIGHTS["acousticness"] * (1 - song.acousticness)
         else:
-            score += 0.5 * song.acousticness
+            score += WEIGHTS["acousticness"] * song.acousticness
 
         return score
 
@@ -111,23 +134,23 @@ def load_songs(csv_path: str) -> List[Dict]:
     return songs
 
 def score_song(song: Dict, user_prefs: Dict) -> float:
-    """Scores a single song dict against user_prefs using genre, mood, and audio feature rules (max 6.0 pts)."""
+    """Scores a single song dict against user_prefs using genre, mood, and audio feature rules (max = MAX_SCORE)."""
     score = 0.0
 
     # Genre rule
     if song["genre"] == user_prefs.get("genre"):
-        score += 2.0
+        score += WEIGHTS["genre_exact"]
     elif song["genre"] in user_prefs.get("related_genres", []):
-        score += 1.0
+        score += WEIGHTS["genre_related"]
 
     # Mood rule
     if song["mood"] == user_prefs.get("mood"):
-        score += 1.5
+        score += WEIGHTS["mood"]
 
     # Continuous similarity rules (squared distance)
-    score += 1.5 * (1 - (song["energy"]       - user_prefs.get("target_energy", 0.5))       ** 2)
-    score += 0.5 * (1 - (song["valence"]      - user_prefs.get("target_valence", 0.5))      ** 2)
-    score += 0.5 * (1 - (song["acousticness"] - user_prefs.get("target_acousticness", 0.5)) ** 2)
+    score += WEIGHTS["energy"]       * (1 - (song["energy"]       - user_prefs.get("target_energy", 0.5))       ** 2)
+    score += WEIGHTS["valence"]      * (1 - (song["valence"]      - user_prefs.get("target_valence", 0.5))      ** 2)
+    score += WEIGHTS["acousticness"] * (1 - (song["acousticness"] - user_prefs.get("target_acousticness", 0.5)) ** 2)
 
     return score
 
